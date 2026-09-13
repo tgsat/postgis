@@ -45,27 +45,21 @@ export default function ItemDetail() {
   const [labelField, setLabelField] = useState("");
   const [filterExpr, setFilterExpr] = useState("");
   const [selId, setSelId] = useState(null);
-  const [drawMode, setDrawMode] = useState(null);
+  const [drawMode, setDrawMode] = useState(false);
   const [drawType, setDrawType] = useState("Point");
+  const [showStyle, setShowStyle] = useState(false);
   const [wmModal, setWmModal] = useState(null);
   const [projects, setProjects] = useState([]);
   const [maps, setMaps] = useState([]);
   const [delConfirm, setDelConfirm] = useState(false);
-  const [protectedTyping, setProtectedTyping] = useState("");
 
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const drawVertsRef = useRef([]);
 
   const fields = useMemo(() => {
-    if (!item) return [];
-    if (item.item_type === "feature_layer") {
-      return (dataset?.schema?.fields) || [];
-    }
-    return [];
+    return (item?.item_type === "feature_layer" && dataset?.schema?.fields) || [];
   }, [item, dataset]);
-
-  const projectsRef = useRef(projects);
 
   useEffect(() => {
     api.get(`/items/${id}/`).then((i) => {
@@ -97,9 +91,9 @@ export default function ItemDetail() {
     }
   }, [item]);
 
-  // ---- map lifecycle ----
   const geo = useMemo(() => (item?.item_type === "feature_layer" ? toGeojson(features) : null), [features, item]);
 
+  // ---- map lifecycle ----
   useEffect(() => {
     if (!containerRef.current || mapRef.current || item?.item_type !== "feature_layer") return;
     const map = new maplibregl.Map({
@@ -126,11 +120,7 @@ export default function ItemDetail() {
         }
         const b = [[ev.point.x - 5, ev.point.y - 5], [ev.point.x + 5, ev.point.y + 5]];
         const hits = map.queryRenderedFeatures(b, { layers: ["items-point", "items-line", "items-fill"] });
-        if (hits.length) {
-          setSelId(hits[0].properties.feature_id || hits[0].id);
-        } else {
-          setSelId(null);
-        }
+        setSelId(hits.length ? hits[0].properties.feature_id : null);
       });
     });
     return () => {
@@ -147,37 +137,29 @@ export default function ItemDetail() {
     try {
       const src = map.getSource("items");
       if (src) src.setData(geo);
-      const id = map.getSource("basemap") ? map.getSource("basemap").setTiles([BASEMAPS[basemap]]) : null;
-      if (map.getStyle().sources.basemap) id;
-    } catch (e) {
-      /* style not ready */
-    }
-    const ensureLayer = (layerId, type, paint) => {
-      if (!map.getLayer(layerId)) {
-        map.addLayer({ id: layerId, type, source: "items", paint });
-      }
-      if (map.getFilter(layerId)) map.setFilter(layerId, null);
+      if (map.getStyle().sources.basemap) map.getSource("basemap").setTiles([BASEMAPS[basemap]]);
+    } catch (e) { /* style not ready */ }
+
+    const ensure = (layerId, type, paint) => {
+      if (!map.getLayer(layerId)) map.addLayer({ id: layerId, type, source: "items", paint });
     };
     if (item?.geom_type === "Point" || item?.geom_type === "MultiPoint") {
-      ensureLayer("items-point", "circle", { "circle-color": color, "circle-radius": 6, "circle-stroke-color": "#fff", "circle-stroke-width": 1 });
+      ensure("items-point", "circle", { "circle-color": color, "circle-radius": 6, "circle-stroke-color": "#fff", "circle-stroke-width": 1 });
       map.removeLayer("items-line"); map.removeLayer("items-fill");
     } else if (item?.geom_type === "LineString" || item?.geom_type === "MultiLineString") {
-      ensureLayer("items-line", "line", { "line-color": color, "line-width": 2.5 });
+      ensure("items-line", "line", { "line-color": color, "line-width": 2.5 });
       map.removeLayer("items-point"); map.removeLayer("items-fill");
     } else {
-      ensureLayer("items-fill", "fill", { "fill-color": color, "fill-opacity": 0.3 });
-      ensureLayer("items-line", "line", { "line-color": color, "line-width": 2 });
+      ensure("items-fill", "fill", { "fill-color": color, "fill-opacity": 0.3 });
+      ensure("items-line", "line", { "line-color": color, "line-width": 2 });
       map.removeLayer("items-point");
     }
+
     if (!map.getLayer("items-highlight")) {
-      map.addLayer({
-        id: "items-highlight", type: "line", source: "items",
-        paint: { "line-color": "#f59e0b", "line-width": 3 },
-        filter: ["==", ["get", "feature_id"], "__none__"],
-      });
+      map.addLayer({ id: "items-highlight", type: "line", source: "items", paint: { "line-color": "#f59e0b", "line-width": 3 }, filter: ["==", ["get", "feature_id"], "__none__"] });
     }
     map.setFilter("items-highlight", selId ? ["==", ["get", "feature_id"], selId] : ["==", ["get", "feature_id"], "__none__"]);
-    if (labelField && map.getLayer("items-label")) map.removeLayer("items-label");
+
     if (labelField && !map.getLayer("items-label")) {
       map.addLayer({
         id: "items-label", type: "symbol", source: "items",
@@ -185,24 +167,26 @@ export default function ItemDetail() {
         paint: { "text-color": "#0f172a", "text-halo-color": "#fff", "text-halo-width": 1.5 },
       });
     }
+    if (map.getLayer("items-label") && !labelField) map.removeLayer("items-label");
+
     let expr = null;
     if (filterExpr) {
       const m = filterExpr.match(/^(\w+)\s*(==|=|!=|<=|>=|<|>)\s*(.+)$/);
       if (m && ["==", "!=", "<=", ">=", "<", ">"].includes(m[2])) {
-        const val = m[3].replace(/^['"]|['"]$/g, "");
-        const num = Number(val);
-        const right = Number.isNaN(num) ? val : num;
-        expr = [m[2], ["get", m[1]], right];
+        const raw = m[3].replace(/^['"]|['"]$/g, "");
+        const num = Number(raw);
+        expr = [m[2], ["get", m[1]], Number.isNaN(num) ? raw : num];
       }
     }
     ["items-point", "items-line", "items-fill"].forEach((l) => {
       if (map.getLayer(l)) {
-        if (!map.getFilter(l) && expr) map.setFilter(l, expr);
-        else if (map.getFilter(l) && !expr) map.setFilter(l, null);
-        else if (map.getFilter(l) && expr) map.setFilter(l, expr);
+        const cur = map.getFilter(l);
+        if (cur && !expr) map.setFilter(l, null);
+        else if (!cur && expr) map.setFilter(l, expr);
+        else if (cur && expr) map.setFilter(l, expr);
       }
     });
-  }, [geo, basemap, color, labelField, filterExpr, selId, item, features]);
+  }, [geo, basemap, color, labelField, filterExpr, selId, item]);
 
   const fitFeatures = () => {
     const map = mapRef.current;
@@ -211,16 +195,13 @@ export default function ItemDetail() {
     features.forEach((f) => {
       if (!f.geom) return;
       if (f.geom.type === "Point") bounds.extend([f.geom.coordinates[0], f.geom.coordinates[1]]);
-      else f.geom.coordinates.flat(Infinity).forEach((c, i) => {
-        if (i % 2 === 0 && typeof c === "number" && f.geom.coordinates && Array.isArray(f.geom.coordinates[0])) {
-          bounds.extend([f.geom.coordinates[0][0], f.geom.coordinates[0][1]]);
-        }
-      });
+      else {
+        const pts = f.geom.type === "Polygon" ? f.geom.coordinates[0] : (f.geom.type === "MultiPolygon" ? f.geom.coordinates[0]?.[0] : f.geom.coordinates);
+        (Array.isArray(pts) ? pts : [f.geom.coordinates[0]]).forEach((c) => { if (Array.isArray(c) && typeof c[0] === "number") bounds.extend([c[0], c[1]]); });
+      }
     });
     if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40 });
   };
-
-  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const selectRow = async (f) => {
     setSelId(f.id);
@@ -228,7 +209,7 @@ export default function ItemDetail() {
     if (map && f.geom) {
       if (f.geom.type === "Point") map.flyTo({ center: [f.geom.coordinates[0], f.geom.coordinates[1]], zoom: Math.max(map.getZoom(), 14) });
       else {
-        const c = f.geom.coordinates[0];
+        const c = f.geom.type === "Polygon" ? f.geom.coordinates[0]?.[0] : f.geom.coordinates?.[0];
         if (Array.isArray(c)) map.flyTo({ center: [c[0], c[1]], zoom: Math.max(map.getZoom(), 14) });
       }
     }
@@ -238,7 +219,7 @@ export default function ItemDetail() {
     const props = { ...f.props, [key]: val };
     api.patch(`/features/${f.id}/`, { props }).then(() => {
       setFeatures((list) => list.map((x) => (x.id === f.id ? { ...x, props } : x)));
-      setOkMsg("Perubahan tersimpan.");
+      setOkMsg("Tersimpan.");
       setTimeout(() => setOkMsg(""), 1800);
     }).catch((e) => setErr(e.message));
   };
@@ -272,9 +253,11 @@ export default function ItemDetail() {
     const coords = drawVertsRef.current;
     let geometry = null;
     if (drawType === "LineString" && coords.length >= 2) geometry = { type: "LineString", coordinates: coords.map((c) => [c[0], c[1]]) };
-    if (drawType === "Polygon" && coords.length >= 3) geometry = { type: "Polygon", coordinates: [coords.map((c) => [c[0], c[1]]), coords[0] ? [coords[0][0], coords[0][1]] : []] };
-    const src = map.getSource("draw");
-    if (!src) {
+    if (drawType === "Polygon" && coords.length >= 3) {
+      const pts = coords.map((c) => [c[0], c[1]]);
+      geometry = { type: "Polygon", coordinates: [pts] };
+    }
+    if (!map.getSource("draw")) {
       map.addSource("draw", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({ id: "draw-line", type: "line", source: "draw", paint: { "line-color": "#22d3ee", "line-width": 2 } });
       map.addLayer({ id: "draw-point", type: "circle", source: "draw", paint: { "circle-color": "#22d3ee", "circle-radius": 5 } });
@@ -292,6 +275,8 @@ export default function ItemDetail() {
       drawVertsRef.current = [];
       setDrawMode(false);
       renderDraw();
+      setOkMsg("Fitur baru ditambahkan.");
+      setTimeout(() => setOkMsg(""), 2000);
     } catch (e) {
       setErr(e.message);
     }
@@ -304,7 +289,7 @@ export default function ItemDetail() {
     if (drawType === "LineString" && coords.length >= 2) geometry = { type: "LineString", coordinates: coords.map((c) => [c[0], c[1]]) };
     if (drawType === "Polygon" && coords.length >= 3) {
       const pts = coords.map((c) => [c[0], c[1]]);
-      geometry = { type: "Polygon", coordinates: [pts, pts[0]] };
+      geometry = { type: "Polygon", coordinates: [pts] };
     }
     if (!geometry) {
       setErr("Belum cukup vertex untuk menyelesaikan geometri.");
@@ -328,8 +313,10 @@ export default function ItemDetail() {
       const found = (Array.isArray(list) ? list : list.results || []).find((i) => i.map_id === res.map_id);
       setWmModal(null);
       if (found) navigate(`/items/${found.id}`);
-      else setOkMsg("Layer ditambahkan ke Web Map.");
-      setTimeout(() => setOkMsg(""), 2000);
+      else {
+        setOkMsg("Layer ditambahkan ke Web Map.");
+        setTimeout(() => setOkMsg(""), 2000);
+      }
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -376,11 +363,6 @@ export default function ItemDetail() {
   };
 
   const deleteItem = async () => {
-    if (item.delete_protection) {
-      setErr("Item dilindungi oleh Delete Protection. Nonaktifkan proteksi terlebih dahulu di tab Settings.");
-      setDelConfirm(false);
-      return;
-    }
     try {
       await api.del(`/items/${item.id}/`);
       navigate("/content");
@@ -405,7 +387,7 @@ export default function ItemDetail() {
     <>
       <div className="topbar">
         <div>
-          <div className="h1">{item.title} <span style={{ fontWeight: 400, fontSize: 14 }} className="muted">({item.display_title || item.title})</span></div>
+          <div className="h1">{item.title}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
             <span className="badge gray">{item.item_type === "feature_layer" ? "Feature Layer" : "Web Map"}</span>
             {item.hosted && <span className="badge blue">hosted</span>}
@@ -419,8 +401,7 @@ export default function ItemDetail() {
           {item.item_type === "feature_layer" && (
             <>
               <Link className="btn secondary" to="/maps"><span style={{ display: "block" }}>Open in Map Viewer</span></Link>
-              <button className="btn secondary" onClick={() => setWmModal("new")}>Add to New Web Map</button>
-              <button className="btn secondary" onClick={() => setWmModal("existing")}>Add to Existing Web Map</button>
+              <button className="btn secondary" onClick={() => setWmModal("new")}>Add to Web Map</button>
             </>
           )}
           {item.item_type === "web_map" && item.map_id && (
@@ -443,57 +424,73 @@ export default function ItemDetail() {
 
       {tab === "overview" && item.item_type === "feature_layer" && (
         <>
-          <div className="grid" style={{ gridTemplateColumns: "260px 1fr" }}>
-            <div className="card" style={{ alignSelf: "start" }}>
-              <div className="muted" style={{ fontWeight: 700, marginBottom: 4 }}>Sidebar</div>
-              <label>Add Basemap</label>
-              <select value={basemap} onChange={(e) => setBasemap(e.target.value)}>
+          <div className="card" style={{ marginBottom: 14, display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {[
+              ["Tipe", `${item.geom_type || "Layer"} · EPSG:4326`],
+              ["Fitur", Number(features.length || 0).toLocaleString()],
+              ["Field", fields.length],
+              ["Dibuat", new Date(item.created_at).toLocaleDateString()],
+            ].map(([k, v]) => (
+              <div key={k}>
+                <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>{k}</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="map-wrap" style={{ height: "52vh", position: "relative" }}>
+            <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+            <div className="marker-menu" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", maxWidth: "100%" }}>
+              <select value={basemap} onChange={(e) => setBasemap(e.target.value)} style={{ width: 150 }}>
                 <option value="osm">OpenStreetMap</option>
                 <option value="carto_light">Carto Light</option>
                 <option value="carto_dark">Carto Dark</option>
                 <option value="satellite">Satellite</option>
               </select>
-              <label>Symbology — Warna</label>
-              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ width: "100%", height: 36, padding: 2 }} />
-              <label>Custom Label — field</label>
-              <select value={labelField} onChange={(e) => setLabelField(e.target.value)}>
-                <option value="">— Tanpa label —</option>
-                {fields.map((f) => <option key={f.name} value={f.name}>{f.label || f.name}</option>)}
-              </select>
-              <label>Custom Filter</label>
-              <input placeholder="mis. kondisi = 'RUSAK'" value={filterExpr} onChange={(e) => setFilterExpr(e.target.value)} />
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button className="btn secondary small" onClick={() => setOkMsg("Konfigurasi tersimpan") || setTimeout(() => setOkMsg(""), 1500)}>Save</button>
-                <button className="btn secondary small" onClick={() => setWmModal("saveas")}>Save As...</button>
-              </div>
-            </div>
-            <div className="map-wrap" style={{ height: 440, position: "relative" }}>
-              <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-              <div className="marker-menu">
-                {!drawMode ? (
-                  <select value={drawType} onChange={(e) => setDrawType(e.target.value)} style={{ width: 110 }}>
+              <button className="btn secondary small" onClick={() => setShowStyle((s) => !s)}>Style</button>
+              {!drawMode ? (
+                <button className="btn small" onClick={() => { drawVertsRef.current = []; setDrawMode(true); }}>+ Add Feature</button>
+              ) : (
+                <>
+                  <select value={drawType} onChange={(e) => { setDrawType(e.target.value); drawVertsRef.current = []; renderDraw(); }} style={{ width: 100 }}>
                     <option value="Point">Point</option>
                     <option value="LineString">Line</option>
                     <option value="Polygon">Polygon</option>
                   </select>
-                ) : null}
-                {!drawMode ? (
-                  <button className="btn small" onClick={() => { drawVertsRef.current = []; setDrawMode(true); }}>+ Add Feature</button>
-                ) : (
-                  <>
-                    <button className="btn small" onClick={drawType === "Point" ? cancelDraw : finishDraw} disabled={drawType !== "Point" && drawVertsRef.current.length < 2}>
-                      {drawType === "Point" ? "Batalkan" : "Finish"}
-                    </button>
-                    <button className="btn danger small" onClick={cancelDraw}>Cancel</button>
-                  </>
-                )}
-                <button className="btn secondary small" onClick={fitFeatures}>Zoom ke Data</button>
-              </div>
+                  <button className="btn small" onClick={drawType === "Point" ? cancelDraw : finishDraw}>
+                    {drawType === "Point" ? "Cancel" : "Finish"}
+                  </button>
+                </>
+              )}
+              <button className="btn secondary small" onClick={fitFeatures}>Zoom</button>
             </div>
+            {showStyle && (
+              <div className="card" style={{ position: "absolute", right: 8, top: 48, width: 250, zIndex: 3, fontSize: 13 }}>
+                <div className="muted" style={{ fontWeight: 700, marginBottom: 6 }}>Symbology</div>
+                <label>Warna</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ width: 40, height: 30, padding: 1 }} />
+                  {PALETTE.map((p) => <button key={p} onClick={() => setColor(p)} style={{ width: 16, height: 16, borderRadius: 3, background: p, border: p === color ? "2px solid #fff" : "none", cursor: "pointer" }} />)}
+                </div>
+                <label>Label — field</label>
+                <select value={labelField} onChange={(e) => setLabelField(e.target.value)}>
+                  <option value="">— tanpa label —</option>
+                  {fields.map((f) => <option key={f.name} value={f.name}>{f.label || f.name}</option>)}
+                </select>
+                <label>Filter</label>
+                <input placeholder="mis. kondisi = 'RUSAK'" value={filterExpr} onChange={(e) => setFilterExpr(e.target.value)} />
+              </div>
+            )}
+            {drawMode && (
+              <div className="card" style={{ position: "absolute", left: 8, top: 8, zIndex: 2, fontSize: 13 }}>
+                {drawType === "Point" ? "Klik peta untuk menempatkan titik." : `Klik peta untuk menambah vertex (${drawVertsRef.current.length})`}
+              </div>
+            )}
           </div>
+
           <div className="card" style={{ marginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-              <div className="h1" style={{ fontSize: 16 }}>Data Table — {dataset?.name}</div>
+              <div className="h1" style={{ fontSize: 16 }}>Data — {dataset?.name}</div>
               <div className="muted">{features.length.toLocaleString()} fitur · klik baris untuk zoom ke peta</div>
             </div>
             <div className="table-scroll" style={{ marginTop: 8 }}>
@@ -511,7 +508,7 @@ export default function ItemDetail() {
                       onClick={(e) => { if (e.target.tagName === "INPUT") return; selectRow(f); }}>
                       <td>{f.id}</td>
                       {fields.map((fl) => (
-                        <td key={fl.name}>
+                        <td key={fl.name} onClick={(e) => e.stopPropagation()}>
                           <input
                             style={{ minWidth: 90, padding: "5px 8px", fontSize: 13 }}
                             defaultValue={f.props ? (f.props[fl.name] ?? "") : ""}
@@ -519,7 +516,7 @@ export default function ItemDetail() {
                           />
                         </td>
                       ))}
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
                         <button className="btn danger small" onClick={() => delFeature(f)}>Delete</button>
                       </td>
                     </tr>
@@ -671,7 +668,7 @@ export default function ItemDetail() {
         <div className="modal">
           <div className="modal-box">
             <div className="h1" style={{ fontSize: 17 }}>
-              {wmModal === "new" ? "Add to New Web Map" : wmModal === "saveas" ? "Save As... Web Map baru" : "Add to Existing Web Map"}
+              {wmModal === "new" ? "Add to New Web Map" : "Add to Existing Web Map"}
             </div>
             {wmModal !== "existing" ? (
               <form onSubmit={(e) => {
@@ -682,7 +679,7 @@ export default function ItemDetail() {
                 addToWebMap({ project: Number(project), name });
               }}>
                 <label>Web Map Title</label>
-                <input name="name" defaultValue={wmModal === "saveas" ? `${item.title} — Web Map` : `Peta ${item.title}`} required />
+                <input name="name" defaultValue={`Peta ${item.title}`} required />
                 <label>Project</label>
                 <select name="project" required defaultValue="">
                   <option value="" disabled>Pilih project...</option>

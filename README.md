@@ -120,11 +120,12 @@ Login System Administrator
 
 ```text
 Halaman Content (menu "Content")
-   → [+ Add Data]
-   → Upload .zip / .gpkg / .csv / .xlsx  (maks 200 MB, drag & drop)
-   → API /upload-jobs/ (pending) → job async analisis (Celery + GDAL/ogr2ogr)
-   → Status "ready": preview layer (nama, geometri, EPSG, jumlah fitur, daftar field);
-        titel layer bisa diubah; untuk CSV/XLSX pilih kolom Longitude/Latitude
+   → [+ New Item (Add Data)]
+   → Modal satu layar ala "New Item" ArcGIS Online:
+        drag & drop / browse .zip .gpkg .csv .xlsx (maks 200 MB)
+        upload + analisis (ogr2ogr/ogrinfo via Celery) otomatis — spinner inline
+        konfirmasi ringkas: geometri, EPSG, jumlah fitur, daftar field
+        opsi judul, kolom Lon/Lat, project → panel "Advanced options…" (terlipat)
    → [Publish] → /upload-jobs/{id}/publish/ (status "processing")
    → job "success" → REDIRECT OTOMATIS ke halaman Item Detail (DATA-011)
 ```
@@ -132,9 +133,9 @@ Halaman Content (menu "Content")
 Halaman Item Detail (`/items/{id}`) menampilkan 3 tab (DATA-012):
 
 ```text
-Overview  · mini map (MapLibre) + sidebar: basemap, simbol warna, label, filter
+Overview  · peta MapLibre full-width (tanpa sidebar) seperti ArcGIS Online
+           · kontrol di pojok peta: basemap, Style (warna/label/filter), + Add Feature (draw), Zoom
            · data table per layer, sinkron 2 arah dengan peta (klik baris ↔ klik fitur)
-           · tombol: Save, Save As..., + Add Feature (draw), Open in Map Viewer
 Data      · kelola field & domain (tipe, panjang, default, wajib, coded value)
            · PUT /items/{id}/fields/ → tersimpan ke schema.database dataset
 Settings  · Sharing: Private / Organization / Public

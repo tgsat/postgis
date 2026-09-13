@@ -176,6 +176,16 @@ tr:hover td { background: var(--bg-accent); }
 .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
 .modal-box { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; width: 460px; max-width: 94vw; max-height: 90vh; overflow: auto; }
 
+.dropzone {
+  border: 2px dashed var(--border); border-radius: 12px; padding: 34px 20px;
+  text-align: center; cursor: pointer; background: var(--bg-2); color: var(--text);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.dropzone:hover, .dropzone:active { border-color: var(--accent-2); background: var(--bg-accent); }
+
+details summary { user-select: none; }
+details summary::-webkit-details-marker { display: none; }
+
 .divider { border-top: 1px solid var(--border); margin: 18px 0; }
 
 /* theme toggle segments */
