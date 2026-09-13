@@ -45,7 +45,7 @@ class MapSerializer(serializers.ModelSerializer):
     company = serializers.SerializerMethodField()
     layers = MapLayerSerializer(source="map_layers", many=True, read_only=True)
     datasets = serializers.PrimaryKeyRelatedField(
-        many=True, queryset=Dataset.objects.all(), required=False, write_only=True, source="datasets"
+        many=True, queryset=Dataset.objects.all(), required=False, write_only=True
     )
 
     class Meta:

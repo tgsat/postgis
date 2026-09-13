@@ -8,6 +8,7 @@ const nav = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/maps", label: "Maps" },
   { to: "/data", label: "Data & Layers" },
+  { to: "/content", label: "Content" },
   { to: "/projects", label: "Projects & Maps" },
   { to: "/forms", label: "Forms" },
 ];

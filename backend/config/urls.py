@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/v1/public/", include("apps.projects.public_urls")),
     path("api/v1/", include("apps.projects.urls")),
     path("api/v1/", include("apps.layers.urls")),
+    path("api/v1/", include("apps.content.urls")),
     path("api/v1/forms/", include("apps.formsurvey.urls")),
     path("api/v1/dashboards/", include("apps.dashboard.urls")),
     path("api/v1/system/", include("apps.sysadmin.urls_api")),

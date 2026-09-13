@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "apps.formsurvey",
     "apps.dashboard",
     "apps.sysadmin",
+    "apps.content",
 ]
 
 MIDDLEWARE = [
@@ -122,6 +123,7 @@ CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
 STORAGE_ROOT = Path(os.environ.get("STORAGE_ROOT", "/storage"))
 ATTACHMENT_STORAGE = STORAGE_ROOT / "attachments"
 EXPORT_STORAGE = STORAGE_ROOT / "exports"
+UPLOAD_STORAGE = STORAGE_ROOT / "uploads"
 
 CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL

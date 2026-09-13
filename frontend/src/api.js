@@ -13,7 +13,11 @@ export function getToken() {
 }
 
 async function request(path, options = {}) {
-  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers = {
+    ...(isForm ? {} : { "Content-Type": "application/json" }),
+    ...(options.headers || {}),
+  };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(BASE + path, { ...options, headers });
   if (res.status === 401) {
@@ -44,7 +48,7 @@ export const api = {
   patch: (path, body) => request(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: (path) => request(path, { method: "DELETE" }),
   upload: (path, formData) =>
-    request(path, { method: "POST", body: formData, headers: {} }),
+    request(path, { method: "POST", body: formData }),
 };
 
 export async function login(username, password) {

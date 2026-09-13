@@ -9,6 +9,8 @@ import MapViewer from "./pages/MapViewer.jsx";
 import DataPage from "./pages/DataPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage.jsx";
 import FormsPage from "./pages/FormsPage.jsx";
+import ContentPage from "./pages/ContentPage.jsx";
+import ItemDetail from "./pages/ItemDetail.jsx";
 import AdminConsole from "./pages/AdminConsole.jsx";
 import PublicMap from "./pages/PublicMap.jsx";
 
@@ -36,6 +38,8 @@ export default function App() {
         <Route path="maps" element={<MapViewer />} />
         <Route path="data" element={<DataPage />} />
         <Route path="projects" element={<ProjectsPage />} />
+        <Route path="content" element={<ContentPage />} />
+        <Route path="items/:id" element={<ItemDetail />} />
         <Route path="forms" element={<FormsPage />} />
         <Route path="admin/*" element={<AdminConsole />} />
       </Route>

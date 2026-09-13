@@ -81,6 +81,15 @@ class DatasetViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         from apps.rbac.audit import audit
 
+        from apps.content.models import Item
+        from rest_framework.exceptions import PermissionDenied
+
+        item = Item.objects.filter(dataset=instance).first()
+        if item and item.delete_protection:
+            raise PermissionDenied(
+                "Item ini dilindungi oleh Delete Protection dan tidak dapat dihapus. "
+                "Nonaktifkan proteksi tersebut terlebih dahulu di tab Settings."
+            )
         audit(self.request, "DELETE", "dataset", str(instance.pk), f'Deleted dataset "{instance.name}"')
         instance.delete()
 
